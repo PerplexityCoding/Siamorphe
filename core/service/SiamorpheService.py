@@ -60,7 +60,9 @@ class SiamorpheService:
         for expression in expressions:
             morphemes = expression["morphemes"]
             for morpheme in morphemes:
-                morpheme.score = max()
+                morpheme.score += expression["level"]
+
+        logging.debug(expressions)
 
 
     def rankMorpheme(self, intervalDb, expr, read, rank):

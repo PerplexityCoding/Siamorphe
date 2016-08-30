@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+import json
+
 class Morpheme:
     def __init__(self, base, inflected, pos, subPos, read, rank = 0, score = 0, id = -1):
         if id == -1:
@@ -22,5 +26,5 @@ class Morpheme:
         return self.id
         
     def __repr__(self):
-        return u'\t'.join([str(self.id), str(self.pos), str(self.subPos), str(self.read), str(self.base),
-                           str(self.rank), str(self.score)])
+        u = unicode(self.base)
+        return "base:" + u.encode('utf-8') + " - rank: " + str(self.rank) + " - score " + str(self.score)

@@ -11,52 +11,117 @@ class JapaneseMorphemesService(MorphemesService):
 
         self.mecab = Mecab({})
         self.initFactors()
+        self.kanjisScoreCache = dict()
 
     def extractMorphemes(self, expression):
         morphemes = self.mecab.posMorphemes(expression)
         return morphemes
 
+    def computeMorphemesBaseScore(self, morphemes):
+
+        logging.info("rankMorphemes")
+        for morpheme in morphemes:
+
+            base = morpheme.base
+            morpheme.baseScore = len(base) * 10
+
+            for i,c in enumerate(base):
+                # skip non-kanji
+                if c < u'\u4E00' or c > u'\u9FBF': continue
+
+                morpheme.baseScore += self.computeKanjiScore(c)
+
     # return a Rank between 0 and 500
-    def rankKanji(self, kanji):
+    def computeKanjiScore(self, kanji):
+        kanjiScore = self.kanjisScoreCache.get(kanji)
+        if kanjiScore:
+            return kanjiScore
+
         kanjiFreq, kanjiStrokeCount = KanjiHelper.getKanjiInfo(kanji)
         
         freqScore =  pow(2, kanjiFreq / 900) * 35.0
         if freqScore > 350:
             freqScore = 350.0
-        
+
         strokeScore = kanjiStrokeCount * 150.0 / 28.0
         if strokeScore > 150:
             strokeScore = 150.0
-        
-        return freqScore + strokeScore
 
-    def initFactors(self):
-        self.cachePow = dict()
-        for i in range(1000):
-            self.cachePow[i] = pow(2, -1.0 * i / 24.0)
+        kanjiScore = freqScore + strokeScore
+        self.kanjisScoreCache[kanji] = kanjiScore
 
-    def getFactor(self, interval):
-        return self.cachePow[interval]
+        return kanjiScore
+
+    def createNotesByKanjiDict(self, notes):
+        notesByKanji = dict()
+
+        for note in notes:
+            for i, c in enumerate(note.expression):
+                # skip non-kanji
+                if c < u'\u4E00' or c > u'\u9FBF': continue
+
+                notesByKanjiList = notesByKanji.get(c)
+                if notesByKanjiList == None:
+                    notesByKanjiList = list()
+                    notesByKanji[c] = notesByKanjiList
+
+                notesByKanjiList.append(note.id)
+
+        logging.debug(notesByKanji)
+        return notesByKanji
+
+    def computeMorphemesScore(self, morphemes):
+
+        logging.info("lemmeDao.getMorphemes() Start")
+        if morphemes == None or len(morphemes) <= 0:
+            return set()
+
+        logging.info("Rank Morphemes Start: " + str(len(morphemes)))
+
+        #intervalDb = self.lemmeDao.getKnownLemmesIntervalDB()
+
+        morphemesKnowledgeDB = {}
+
+        modifiedMorphemes = list()
+        for morpheme in morphemes:
+            score = self.computeMorphemeScore(morpheme, morphemesKnowledgeDB)
+            if morpheme.score == None or morpheme.score == 0 or abs(int(morpheme.score) - int(score)) >= 5:
+                morpheme.score = score
+                modifiedMorphemes.append(morpheme)
+
+        logging.info("Update all Score " + str(len(modifiedLemmes)))
+        if len(modifiedLemmes) > 0:
+            self.lemmeDao.updateLemmesScore(modifiedLemmes)
+
+            logging.info("Mark Modified Notes: " + str(len(modifiedLemmes)))
+            notes = self.morphemeDao.getModifiedNotes(modifiedLemmes)
+            logging.info("getModifiedNotes() : " + str(len(modifiedLemmes)))
+            return notes
+
+        return set()
 
     # Adapted from MorphMan 2
-    def rankMorpheme(self, intervalDb, expr, read, rank):
-        score = rank
-        
-        if read == None or rank == None:
+    def computeMorphemeScore(self, morpheme, morphemesById):
+        score = morpheme.baseScore
+        expr = morpheme.base
+        read = morpheme.read
+
+        if read == None or score == None:
             return 0
-        
-        if (expr, read) in intervalDb:
-            interval = intervalDb[(expr, read)]
-            score = score * self.getFactor(interval)
+
+        if morpheme.id in morphemesById:
+            morphemesKnowledgeLevel = morphemesById[morpheme.id]
+            score = score * self.getFactor(morphemesKnowledgeLevel)
         else:
-            hasKanji = False
             for i, c in enumerate(expr):
                 # skip non-kanji
                 if c < u'\u4E00' or c > u'\u9FBF': continue
                 
-                hasKanji = True
                 npow = 0
-                for (e,r), ivl in intervalDb.iteritems():
+                for morpheme, ivl in morphemesKnowledgeDB.iteritems():
+                    e = morpheme.base
+                    r = morpheme.read
+
                     # has same kanji
                     if c in e:
                         if npow > -1.0: npow -= 0.25
@@ -69,50 +134,16 @@ class JapaneseMorphemesService(MorphemesService):
                         npow = npow * (1.0 - self.getFactor(ivl))
                 score *= pow(2, npow)
         return score
-    
-    def rankMorphemes(self, morphemes):
 
-        logging.info("rankMorphemes")
-        for morpheme in morphemes:
-            
-            expr = morpheme.base
-            morpheme.rank = len(expr) * 10
-            
-            for i,c in enumerate(expr):
-                # skip non-kanji
-                if c < u'\u4E00' or c > u'\u9FBF': continue
+    def initFactors(self):
+        self.cachePow = dict()
+        for i in range(1000):
+            self.cachePow[i] = pow(2, -1.0 * i / 24.0)
 
-                morpheme.rank += self.rankKanji(c)
-            
-    def computeMorphemesScore(self, allLemmes):
-
-        logging.info("lemmeDao.getMorphemes() Start")
-        if allLemmes == None or len(allLemmes) <= 0:
-            return set()
-
-        logging.info("Rank Morphemes Start: " + str(len(allLemmes)))
-        intervalDb = self.lemmeDao.getKnownLemmesIntervalDB()
-        
-        modifiedLemmes = list()
-        for lemme in allLemmes:
-            score = self.rankMorpheme(intervalDb, lemme.base, lemme.read, lemme.rank)
-            if lemme.score == None or lemme.score == 0 or abs(int(lemme.score) - int(score)) >= 5:
-                lemme.score = score
-                modifiedLemmes.append(lemme)
-
-        logging.info("Update all Score " + str(len(modifiedLemmes)))
-        if len(modifiedLemmes) > 0:
-            self.lemmeDao.updateLemmesScore(modifiedLemmes)
-
-            logging.info("Mark Modified Notes: " + str(len(modifiedLemmes)))
-            notes = self.morphemeDao.getModifiedNotes(modifiedLemmes)
-            logging.info("getModifiedNotes() : " + str(len(modifiedLemmes)))
-            return notes
-        
-        return set()
+    def getFactor(self, interval):
+        return self.cachePow[interval]
     
     def getLinkedMorphemes(self, allLemmes):
-        
         if len(allLemmes) <= 0:
             return set()
         

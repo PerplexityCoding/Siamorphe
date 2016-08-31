@@ -3,8 +3,8 @@ import logging
 import json
 
 from core.service.lang.jp.JapaneseMorphemesService import JapaneseMorphemesService
-
 from core.utils.utils import getList
+from core.service.dto.Note import Note
 
 class SiamorpheService:
 
@@ -15,83 +15,78 @@ class SiamorpheService:
         if language == "jp":
             self.morphemesService = JapaneseMorphemesService()
 
-    def createDataBase(self):
+    def analyzeNotes(self, notes):
 
-        logging.warning("create db")
+        notes = json.loads(notes, object_hook=self.loadNotesFromJson)
 
-    def analyzeExpressions(self, expressions):
+        self.morphemesService.createNotesByKanji(notes)
 
-        expressions = json.loads(expressions)
+        allMorphemes = self.analyzeMorphemes(notes)
+        self.computeMorphemesScore(notes, allMorphemes)
 
-        allMorphemes = self.analyzeMorphemes(expressions)
-        self.computeMorphemesScore(expressions, allMorphemes)
+    def loadNotesFromJson(self, dict):
+        return Note(dict["id"], dict["expression"], dict["level"])
 
-    def analyzeMorphemes(self, expressions):
+    def analyzeMorphemes(self, notes):
 
         logging.debug("Extract Morphemes")
         allUniqueMorphemes = dict()
-        for expression in expressions:
-            expressionContent = expression["content"]
-            logging.debug(expressionContent)
+        for note in notes:
+            expression = note.expression
+            logging.debug(expression)
 
-            morphemes = self.morphemesService.extractMorphemes(expressionContent)
-            expressionMorphemes = set() # prevent duplicate morphemes in sentence
+            morphemes = self.morphemesService.extractMorphemes(expression)
+            noteMorphemes = set() # prevent duplicate morphemes in sentence
             for morpheme in morphemes:
                 morphemeId = morpheme.id
                 if morpheme in allUniqueMorphemes:
                     morpheme = allUniqueMorphemes[morphemeId]
                 else:
                     allUniqueMorphemes[morphemeId] = morpheme
-                expressionMorphemes.add(morpheme)
-            expression["morphemes"] = expressionMorphemes
+                noteMorphemes.add(morpheme)
+            note.morphemes = noteMorphemes
 
         allUniqueMorphemes = getList(allUniqueMorphemes)
         allUniqueMorphemes = self.morphemesService.filterMorphemes(allUniqueMorphemes)
 
-        self.morphemesService.rankMorphemes(allUniqueMorphemes)
+        self.morphemesService.computeMorphemesBaseScore(allUniqueMorphemes)
 
         #logging.debug(allUniqueMorphemes.get(0).score)
         #self.lemmeDao.persistLemmes(allUniqueMorphemes)
 
         return allUniqueMorphemes
 
-    def computeMorphemesScore(self, expressions, allLemmes):
+    def computeMorphemesScore(self, notes, allLemmes):
 
-        for expression in expressions:
-            morphemes = expression["morphemes"]
+        for note in notes:
+            morphemes = note.morphemes
             for morpheme in morphemes:
-                morpheme.score += expression["level"]
+                morpheme.score += note.knowledgeLevel
+                logging.debug(morpheme)
 
-        logging.debug(expressions)
+        logging.debug(notes)
 
+    def computeNotesScore(self, notes):
 
-    def rankMorpheme(self, intervalDb, expr, read, rank):
-        score = rank
+        if notes == None:
+            return None
 
-        if read == None or rank == None:
-            return 0
+        logging.debug("Compute Notes " + str(len(notes)))
 
-        if (expr, read) in intervalDb:
-            interval = intervalDb[(expr, read)]
-            score = score * self.getFactor(interval)
-        else:
-            hasKanji = False
-            for i, c in enumerate(expr):
-                # skip non-kanji
-                if c < u'\u4E00' or c > u'\u9FBF': continue
+        modifiedNotes = list()
+        for note in notes:
+            morphemes = note.morphemes
+            score = 0
+            for morpheme in morphemes:
+                factor = pow(2, -1.0 * morpheme.score / 24.0) # number between 1 and 0; lim (itv -> +inf) -> 0
+                score += 1000 * factor + morpheme.baseScore
 
-                hasKanji = True
-                npow = 0
-                for (e,r), ivl in intervalDb.iteritems():
-                    # has same kanji
-                    if c in e:
-                        if npow > -1.0: npow -= 0.25
-                        # has same kanji at same pos
-                        if len(e) > i and c == e[i]:
-                            if npow > -1.5: npow -= 0.2
-                            # has same kanji at same pos with similar reading
-                            if i == 0 and read[0] == r[0] or i == len(expr)-1 and read[-1] == r[-1]:
-                                npow -= 1.0
-                        npow = npow * (1.0 - self.getFactor(ivl))
-                score *= pow(2, npow)
-        return score
+            if note.score == 0 or note.score == None or abs(int(note.score) - int(score)) >= 15: #see if changing it every time is slow now
+                note.score = score
+                modifiedNotes.append(note)
+
+        logging.debug("Modified Notes " + str(len(modifiedNotes)))
+        if len(modifiedNotes) > 0:
+            return modifiedNotes
+
+        return None

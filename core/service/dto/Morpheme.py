@@ -3,7 +3,7 @@
 import json
 
 class Morpheme:
-    def __init__(self, base, inflected, pos, subPos, read, rank = 0, score = 0, id = -1):
+    def __init__(self, base, inflected, pos, subPos, read, score = 0, baseScore = 0, id = -1):
         if id == -1:
             id = hash((pos, subPos, read, base))
         self.id = id
@@ -11,7 +11,7 @@ class Morpheme:
         self.subPos = subPos
         self.read = read
         self.base = base
-        self.rank = rank
+        self.baseScore = baseScore
         self.score = score
 
     def __ne__(self, o):
@@ -27,4 +27,4 @@ class Morpheme:
         
     def __repr__(self):
         u = unicode(self.base)
-        return "base:" + u.encode('utf-8') + " - rank: " + str(self.rank) + " - score " + str(self.score)
+        return "#Morpheme# base:" + u.encode('utf-8') + " - baseScore: " + str(self.baseScore) + " - score " + str(self.score)

@@ -3,7 +3,7 @@
 import json
 
 class Morpheme:
-    def __init__(self, base, inflected, pos, subPos, read, score = 0, baseScore = 0, id = -1):
+    def __init__(self, base, inflected, pos, subPos, read, score = 0, baseScore = 0, knowledgeLevel = 0, id = -1):
         if id == -1:
             id = hash((pos, subPos, read, base))
         self.id = id
@@ -13,6 +13,9 @@ class Morpheme:
         self.base = base
         self.baseScore = baseScore
         self.score = score
+
+        # max level knowlegde in all associated notes
+        self.knowledgeLevel = knowledgeLevel
 
     def __ne__(self, o):
         return not self.__eq__(o)
@@ -27,4 +30,5 @@ class Morpheme:
         
     def __repr__(self):
         u = unicode(self.base)
-        return "#Morpheme# base:" + u.encode('utf-8') + " - baseScore: " + str(self.baseScore) + " - score " + str(self.score)
+        return "#Morpheme# base:" + u.encode('utf-8') + " - baseScore: " + str(self.baseScore) + " - score " + str(self.score) +\
+               " knowledgeLevel: " + str(self.knowledgeLevel)

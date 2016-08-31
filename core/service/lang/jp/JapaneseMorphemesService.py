@@ -3,6 +3,7 @@ import logging
 from core.service.MorphemesService import *
 from core.service.lang.jp.KanjiHelper import KanjiHelper
 from core.service.ext.pos_tagger.Mecab import Mecab
+from core.utils.utils import addItemInDictList
 
 class JapaneseMorphemesService(MorphemesService):
     
@@ -10,7 +11,6 @@ class JapaneseMorphemesService(MorphemesService):
         MorphemesService.__init__(self)
 
         self.mecab = Mecab({})
-        self.initFactors()
         self.kanjisScoreCache = dict()
 
     def extractMorphemes(self, expression):
@@ -29,9 +29,11 @@ class JapaneseMorphemesService(MorphemesService):
                 # skip non-kanji
                 if c < u'\u4E00' or c > u'\u9FBF': continue
 
-                morpheme.baseScore += self.computeKanjiScore(c)
+                morpheme.baseScore += (self.computeKanjiScore(c) * 3)
 
-    # return a Rank between 0 and 500
+            morpheme.baseScore = min(morpheme.baseScore, 500)
+
+    # return a Score between 0 and 100
     def computeKanjiScore(self, kanji):
         kanjiScore = self.kanjisScoreCache.get(kanji)
         if kanjiScore:
@@ -39,36 +41,39 @@ class JapaneseMorphemesService(MorphemesService):
 
         kanjiFreq, kanjiStrokeCount = KanjiHelper.getKanjiInfo(kanji)
         
-        freqScore =  pow(2, kanjiFreq / 900) * 35.0
-        if freqScore > 350:
-            freqScore = 350.0
+        freqScore =  pow(2, kanjiFreq / 900) * 7.0
+        if freqScore > 70:
+            freqScore = 70.0
 
-        strokeScore = kanjiStrokeCount * 150.0 / 28.0
-        if strokeScore > 150:
-            strokeScore = 150.0
+        strokeScore = kanjiStrokeCount * 30.0 / 28.0
+        if strokeScore > 30:
+            strokeScore = 30.0
 
         kanjiScore = freqScore + strokeScore
         self.kanjisScoreCache[kanji] = kanjiScore
 
         return kanjiScore
 
-    def createNotesByKanjiDict(self, notes):
+    def createKanjiDicts(self, notes):
         notesByKanji = dict()
+        morphemesByKanji = dict()
 
         for note in notes:
-            for i, c in enumerate(note.expression):
-                # skip non-kanji
-                if c < u'\u4E00' or c > u'\u9FBF': continue
+            for morpheme in note.morphemes:
+                for i, c in enumerate(morpheme.base):
+                    # skip non-kanji
+                    if c < u'\u4E00' or c > u'\u9FBF': continue
 
-                notesByKanjiList = notesByKanji.get(c)
-                if notesByKanjiList == None:
-                    notesByKanjiList = list()
-                    notesByKanji[c] = notesByKanjiList
+                    addItemInDictList(notesByKanji, c, note.id)
+                    addItemInDictList(morphemesByKanji, c, morpheme.id)
 
-                notesByKanjiList.append(note.id)
+        self.notesByKanji = notesByKanji
+        self.morphemesByKanji = morphemesByKanji
 
         logging.debug(notesByKanji)
-        return notesByKanji
+        logging.debug(morphemesByKanji)
+
+        return notesByKanji, morphemesByKanji
 
     def computeMorphemesScore(self, morphemes):
 
@@ -78,71 +83,61 @@ class JapaneseMorphemesService(MorphemesService):
 
         logging.info("Rank Morphemes Start: " + str(len(morphemes)))
 
-        #intervalDb = self.lemmeDao.getKnownLemmesIntervalDB()
-
-        morphemesKnowledgeDB = {}
+        self.computeMorphemesBaseScore(morphemes)
 
         modifiedMorphemes = list()
         for morpheme in morphemes:
-            score = self.computeMorphemeScore(morpheme, morphemesKnowledgeDB)
+            score = self.computeMorphemeScore(morpheme)
             if morpheme.score == None or morpheme.score == 0 or abs(int(morpheme.score) - int(score)) >= 5:
                 morpheme.score = score
                 modifiedMorphemes.append(morpheme)
 
-        logging.info("Update all Score " + str(len(modifiedLemmes)))
-        if len(modifiedLemmes) > 0:
-            self.lemmeDao.updateLemmesScore(modifiedLemmes)
-
-            logging.info("Mark Modified Notes: " + str(len(modifiedLemmes)))
-            notes = self.morphemeDao.getModifiedNotes(modifiedLemmes)
-            logging.info("getModifiedNotes() : " + str(len(modifiedLemmes)))
-            return notes
-
-        return set()
+                logging.debug(morpheme)
 
     # Adapted from MorphMan 2
-    def computeMorphemeScore(self, morpheme, morphemesById):
+    def computeMorphemeScore(self, morpheme):
         score = morpheme.baseScore
         expr = morpheme.base
         read = morpheme.read
+        knowledgeLevel = morpheme.knowledgeLevel / 100.0
+
+        if knowledgeLevel == 0:
+            return 500 + min(score, 500)
 
         if read == None or score == None:
             return 0
 
-        if morpheme.id in morphemesById:
-            morphemesKnowledgeLevel = morphemesById[morpheme.id]
-            score = score * self.getFactor(morphemesKnowledgeLevel)
+        if knowledgeLevel > 0:
+            score = score * (1.0 - knowledgeLevel)
         else:
             for i, c in enumerate(expr):
                 # skip non-kanji
                 if c < u'\u4E00' or c > u'\u9FBF': continue
-                
+
+                morphemesId = self.morphemesByKanji[c]
+
                 npow = 0
-                for morpheme, ivl in morphemesKnowledgeDB.iteritems():
-                    e = morpheme.base
-                    r = morpheme.read
+                if morphemesId != None:
+                    for morphemeId in morphemesId:
+                        morpheme = self.morphemesById[morphemeId]
+                        if morpheme != None:
+                            e = morpheme.base
+                            r = morpheme.read
+                            ivl = morpheme.knowledgeLevel
 
-                    # has same kanji
-                    if c in e:
-                        if npow > -1.0: npow -= 0.25
-                        # has same kanji at same pos
-                        if len(e) > i and c == e[i]:
-                            if npow > -1.5: npow -= 0.2
-                            # has same kanji at same pos with similar reading
-                            if i == 0 and read[0] == r[0] or i == len(expr)-1 and read[-1] == r[-1]:
-                                npow -= 1.0
-                        npow = npow * (1.0 - self.getFactor(ivl))
+                            # has same kanji
+                            if c in e:
+                                if npow > -1.0: npow -= 0.25
+                                # has same kanji at same pos
+                                if len(e) > i and c == e[i]:
+                                    if npow > -1.5: npow -= 0.2
+                                    # has same kanji at same pos with similar reading
+                                    if i == 0 and read[0] == r[0] or i == len(expr)-1 and read[-1] == r[-1]:
+                                        npow -= 1.0
+                                npow = npow * knowledgeLevel
                 score *= pow(2, npow)
-        return score
+        return min(score, 1000)
 
-    def initFactors(self):
-        self.cachePow = dict()
-        for i in range(1000):
-            self.cachePow[i] = pow(2, -1.0 * i / 24.0)
-
-    def getFactor(self, interval):
-        return self.cachePow[interval]
-    
     def getLinkedMorphemes(self, allLemmes):
         if len(allLemmes) <= 0:
             return set()

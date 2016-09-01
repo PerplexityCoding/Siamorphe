@@ -22,6 +22,9 @@ class SiamorpheService:
 
         logging.debug(notes)
 
+    def analyzeNotesFile(self, path):
+        return
+
     def loadNotesFromJson(self, dict):
         return Note(dict["id"], dict["expression"], dict["level"])
 

@@ -22,7 +22,7 @@ class MorphemesService:
 
         for note in notes:
             expression = note.expression
-            logging.debug(expression)
+            #logging.debug(expression)
 
             morphemes = self.extractMorphemes(expression)
             noteMorphemes = set() # prevent duplicate morphemes in sentence
@@ -40,19 +40,24 @@ class MorphemesService:
         allUniqueMorphemes = getList(morphemesById)
         allUniqueMorphemes = self.filterMorphemes(allUniqueMorphemes)
 
+        logging.debug("Extract Morphemes: Done")
+
         return allUniqueMorphemes
 
     def refreshMorphemesKnowledgeLevel(self, notes):
 
-        logging.debug(notes)
+        #logging.debug(notes)
+
+        logging.debug("refreshMorphemesKnowledgeLevel")
 
         for note in notes:
             for morpheme in note.morphemes:
                 morpheme.knowledgeLevel = max(morpheme.knowledgeLevel, note.knowledgeLevel)
-                logging.debug(morpheme)
+                #logging.debug(morpheme)
 
-        logging.debug("refreshMorphemesKnowledgeLevel")
-        logging.debug(notes)
+        logging.debug("refreshMorphemesKnowledgeLevel: Done")
+
+        #logging.debug(notes)
 
     def computeNotesScore(self, notes):
 
@@ -66,7 +71,7 @@ class MorphemesService:
             morphemes = note.morphemes
             score = 0
             for morpheme in morphemes:
-                score += morpheme.score
+                score += (morpheme.score + morpheme.baseScore)
 
             if note.score == 0 or note.score == None or abs(int(note.score) - int(score)) >= 15: #see if changing it every time is slow now
                 note.score = score

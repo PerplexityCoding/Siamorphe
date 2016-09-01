@@ -70,14 +70,11 @@ class JapaneseMorphemesService(MorphemesService):
         self.notesByKanji = notesByKanji
         self.morphemesByKanji = morphemesByKanji
 
-        logging.debug(notesByKanji)
-        logging.debug(morphemesByKanji)
-
         return notesByKanji, morphemesByKanji
 
     def computeMorphemesScore(self, morphemes):
 
-        logging.info("lemmeDao.getMorphemes() Start")
+        #logging.info("lemmeDao.getMorphemes() Start")
         if morphemes == None or len(morphemes) <= 0:
             return set()
 
@@ -92,7 +89,7 @@ class JapaneseMorphemesService(MorphemesService):
                 morpheme.score = score
                 modifiedMorphemes.append(morpheme)
 
-                logging.debug(morpheme)
+                #logging.debug(morpheme)
 
     # Adapted from MorphMan 2
     def computeMorphemeScore(self, morpheme):
@@ -135,25 +132,9 @@ class JapaneseMorphemesService(MorphemesService):
                                     if i == 0 and read[0] == r[0] or i == len(expr)-1 and read[-1] == r[-1]:
                                         npow -= 1.0
                                 npow = npow * knowledgeLevel
-                score *= pow(2, npow)
+                    score *= pow(2, npow)
         return min(score, 1000)
 
-    def getLinkedMorphemes(self, allLemmes):
-        if len(allLemmes) <= 0:
-            return set()
-        
-        kanjis = set()
-        for lemme in allLemmes:
-            expr = lemme.base
-            for i, c in enumerate(expr):
-                # skip non-kanji
-                if c < u'\u4E00' or c > u'\u9FBF': continue
-                kanjis.add(c)
-
-        if len(kanjis) < 0:
-            return allLemmes
-        return self.lemmeDao.getChangedAllMorphemesFromKanjis(kanjis)
-    
     def filterMorphemes(self, morphemes):
         # Do nothing
         return morphemes

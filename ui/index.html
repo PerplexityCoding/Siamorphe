@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+    <link rel="stylesheet" href="js/lib/slickgrid/slick.grid.css" type="text/css"/>
+    <link rel="stylesheet" href="js/lib/slickgrid/slick-default-theme.css" type="text/css"/>
+
+    <link rel="stylesheet" href="css/index.css" type="text/css"/>
+
+    <script src="js/lib/knockout-3.4.0.js"></script>
+    <!--<script src="js/lib/jquery-3.1.0.min.js"></script>-->
+    <script src="js/lib/slickgrid/lib/jquery-1.7.min.js"></script>
+    <script src="js/lib/slickgrid/lib/jquery-ui-1.8.24.custom.min.js"></script>
+    <script src="js/lib/slickgrid/lib/jquery.event.drag-2.2.js"></script>
+
+
+    <script src="js/lib/slickgrid/slick.core.js"></script>
+    <script src="js/lib/slickgrid/slick.formatters.js"></script>
+    <script src="js/lib/slickgrid/slick.editors.js"></script>
+    <script src="js/lib/slickgrid/slick.grid.js"></script>
+    <script src="js/lib/slickgrid/slick.dataview.js"></script>
+
+</head>
+<body>
+
+<div id="notesGrid"></div>
+
+<script>
+    function PercentCompleteBarFormatter(colorFn) {
+        return function(row, cell, value, columnDef, dataContext) {
+            if (value == null || value === "") {
+                return "";
+            }
+
+            var color = colorFn(value);
+
+            return "<span class='percent-complete-bar' style='background:" + color + ";width:" + value + "%'></span>";
+        }
+    }
+
+    function PercentDifficultyCompleteBarFormatter() {
+        return PercentCompleteBarFormatter(function(value) {
+            var color;
+
+            if (value < 10) {
+                color = "grey";
+            } else if (value < 40) {
+                color = "green";
+            } else if (value < 70) {
+                color = "lightsalmon";
+            } else if (value < 90) {
+                color = "orange";
+            } else {
+                color = "red";
+            }
+
+            return color;
+        });
+    }
+
+    function PercentEaseCompleteBarFormatter() {
+        return PercentCompleteBarFormatter(function(value) {
+            var color;
+
+            if (value < 10) {
+                color = "red";
+            } else if (value < 40) {
+                color = "lightsalmon";
+            } else if (value < 70) {
+                color = "orange";
+            } else {
+                color = "green";
+            }
+
+            return color;
+        });
+    }
+
+    function NumberFormatter(row, cell, value, columnDef, dataContext) {
+        if (!(value instanceof Number)) {
+            value = Number(value);
+        }
+        return value.toFixed(2);
+    }
+
+    $.getJSON("/data/notes.json", function(data) {
+
+        var columns = [
+            {id: "id", name: "Id", field: "id", width: 150, cssClass: "cell-title", sortable: true},
+            {id: "expression", name: "Expression", field: "expression", width: 475, cssClass: "cell-title", sortable: true},
+            {id: "difficultyScore", name: "Difficulty Score", field: "difficultyScore", width: 200, cssClass: "cell-title", formatter: PercentDifficultyCompleteBarFormatter(), sortable: true},
+            {id: "score", name: "Score", field: "score", width: 200, cssClass: "cell-title", sortable: true, formatter: NumberFormatter},
+            {id: "knowledgeLevel", name: "Knowledge Level", field: "knowledgeLevel", width: 200, cssClass: "cell-title", formatter: PercentEaseCompleteBarFormatter(), sortable: true}
+        ];
+
+        // initialize the model
+        var dataView = new Slick.Data.DataView({ inlineFilters: true });
+        dataView.beginUpdate();
+        dataView.setItems(data);
+        dataView.endUpdate();
+
+        // initialize the grid
+        var grid = new Slick.Grid("#notesGrid", dataView, columns, {frozenColumn: 0, frozenRow: 3});
+
+        grid.onSort.subscribe(function (e, args) {
+            var col = args.sortCol;
+            data.sort(function (dataRow1, dataRow2) {
+                var field = col.field;
+                var sign = args.sortAsc ? 1 : -1;
+                var value1 = dataRow1[field], value2 = dataRow2[field];
+                var result = (value1 == value2 ? 0 : (value1 > value2 ? 1 : -1)) * sign;
+                if (result != 0) {
+                    return result;
+                }
+                return 0;
+            });
+            dataView.refresh();
+            grid.invalidate();
+            grid.render();
+        });
+
+    });
+</script>
+
+
+</body>
+</html>

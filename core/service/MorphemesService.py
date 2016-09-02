@@ -78,7 +78,7 @@ class MorphemesService:
                 if score >= 1000:
                     note.difficultyScore = (1.0 - pow(2, (-1.0 * score / 1000.0 + 0.84))) * 100.0
                 else:
-                    note.difficultyScore = score / 10.0
+                    note.difficultyScore = score / 100.0
                 modifiedNotes.append(note)
 
         notes.sort(key=lambda x: x.difficultyScore, reverse=True)

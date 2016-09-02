@@ -29,10 +29,15 @@ class SiamorpheService:
 
         with io.open(os.getcwd() + "\\storage\\notes.json", "w", encoding='utf8') as outfile:
             outfile.write(u"[\n")
+            i = 0
             for note in notes:
                 note.morphemes = [m.id for m in note.morphemes]
                 data = json.dumps(note, default=lambda o: o.__dict__, ensure_ascii=False, encoding='utf8')
-                outfile.write(unicode(data) + u",\n") # + u",\n"
+                outfile.write(unicode(data)) # + u",\n"
+                if (i + 1) < len(notes):
+                    outfile.write(u",\n")
+                i += 1
+
             outfile.write(u"]")
 
     def analyzeNotesFile(self, path):

@@ -2,6 +2,8 @@
 import logging
 import json
 import codecs
+import os
+import io
 
 from core.service.lang.jp.JapaneseMorphemesService import JapaneseMorphemesService
 from core.service.dto.Note import Note
@@ -21,11 +23,25 @@ class SiamorpheService:
 
         self.morphemesService.analyzeNotes(notes)
 
+        self.saveNotesToJson(notes)
+
+    def saveNotesToJson(self, notes):
+
+        with io.open(os.getcwd() + "\\storage\\notes.json", "w", encoding='utf8') as outfile:
+            outfile.write(u"[\n")
+            for note in notes:
+                note.morphemes = [m.id for m in note.morphemes]
+                data = json.dumps(note, default=lambda o: o.__dict__, ensure_ascii=False, encoding='utf8')
+                outfile.write(unicode(data) + u",\n") # + u",\n"
+            outfile.write(u"]")
+
     def analyzeNotesFile(self, path):
 
         notes = self.loadNotesFromCsv(path)
 
         self.morphemesService.analyzeNotes(notes)
+
+        self.saveNotesToJson(notes)
 
         #logging.debug(notes)
 

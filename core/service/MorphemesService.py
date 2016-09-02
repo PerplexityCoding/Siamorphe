@@ -75,7 +75,13 @@ class MorphemesService:
 
             if note.score == 0 or note.score == None or abs(int(note.score) - int(score)) >= 15: #see if changing it every time is slow now
                 note.score = score
+                if score >= 1000:
+                    note.difficultyScore = (1.0 - pow(2, (-1.0 * score / 1000.0 + 0.84))) * 100.0
+                else:
+                    note.difficultyScore = score / 10.0
                 modifiedNotes.append(note)
+
+        notes.sort(key=lambda x: x.difficultyScore, reverse=True)
 
         logging.debug("Modified Notes " + str(len(modifiedNotes)))
         if len(modifiedNotes) > 0:

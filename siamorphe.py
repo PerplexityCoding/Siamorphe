@@ -31,26 +31,12 @@ class Browser(QtGui.QMainWindow):
         self.gridLayout.setMargin(0)
         self.gridLayout.setSpacing(0)
 
-        self.horizontalLayout = QtGui.QHBoxLayout()
-        self.tb_url = QtGui.QLineEdit(self.frame)
-        self.bt_back = QtGui.QPushButton(self.frame)
-        self.bt_ahead = QtGui.QPushButton(self.frame)
-
-        self.horizontalLayout.addWidget(self.bt_ahead)
-        self.horizontalLayout.addWidget(self.tb_url)
-        self.gridLayout.addLayout(self.horizontalLayout)
-
         self.html = QtWebKit.QWebView()
         self.gridLayout.addWidget(self.html)
         self.mainLayout.addWidget(self.frame)
         self.setCentralWidget(self.centralwidget)
 
-        self.connect(self.tb_url, QtCore.SIGNAL("returnPressed()"), self.browse)
-        self.connect(self.bt_back, QtCore.SIGNAL("clicked()"), self.html.back)
-        self.connect(self.bt_ahead, QtCore.SIGNAL("clicked()"), self.html.forward)
-
         self.default_url = "https://google.fr"
-        self.tb_url.setText(self.default_url)
         self.browse()
 
     def browse(self):
@@ -59,7 +45,7 @@ class Browser(QtGui.QMainWindow):
             Webview widget.
         """
 
-        url = self.tb_url.text() if self.tb_url.text() else self.default_url
+        url = self.default_url
         self.html.load(QtCore.QUrl(url))
         self.html.show()
 
